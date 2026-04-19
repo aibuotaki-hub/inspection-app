@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>設備点検アプリ</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#9a3412;--blue-mid:#ea580c;--blue-light:#ffedd5;
+      --green:#16a34a;--red:#dc2626;--orange:#ea580c;
+      --gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+      --gray-400:#94a3b8;--gray-600:#475569;--gray-800:#1e293b;
+      --radius:14px;--shadow:0 1px 4px rgba(0,0,0,.10);
+    }
+    html,body{height:100%;overflow:hidden}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Meiryo",sans-serif;
+      background:var(--gray-100);color:var(--gray-800);font-size:16px;
+    }
+
+    /* ── Screens ── */
+    .screen{display:none;height:100vh;flex-direction:column;overflow:hidden}
+    .screen.active{display:flex}
+    .screen-body{flex:1;overflow-y:auto;padding:14px 12px 80px;-webkit-overflow-scrolling:touch}
+
+    /* ── Screen Header ── */
+    .screen-header{
+      background:var(--blue);color:#fff;
+      padding:14px 16px 12px;
+      display:flex;align-items:center;gap:10px;
+      flex-shrink:0;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+      position:relative;
+    }
+    .screen-header h2{font-size:17px;font-weight:700;flex:1;text-align:center}
+    .back-btn{
+      background:rgba(255,255,255,.2);border:none;color:#fff;
+      padding:7px 12px;border-radius:8px;font-size:14px;font-weight:600;
+      cursor:pointer;font-family:inherit;white-space:nowrap;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .header-action{position:absolute;right:16px;top:50%;transform:translateY(-50%)}
+    .header-action button{
+      background:rgba(255,255,255,.2);border:none;color:#fff;
+      padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;
+      cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;
+    }
+
+    /* ── Home Screen ── */
+    .home-body{
+      flex:1;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      padding:30px 24px;gap:20px;
+      background:linear-gradient(160deg,#9a3412 0%,#ea580c 100%);
+    }
+    .home-logo{
+      text-align:center;color:#fff;margin-bottom:10px;
+    }
+    .home-logo h1{font-size:26px;font-weight:800;letter-spacing:.03em}
+    .home-logo p{font-size:13px;opacity:.75;margin-top:6px}
+    .home-status{
+      display:flex;align-items:center;gap:6px;font-size:12px;
+      color:rgba(255,255,255,.7);background:rgba(0,0,0,.2);
+      padding:6px 14px;border-radius:20px;
+    }
+    .status-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .status-dot.online{background:#4ade80}
+    .btn-home-main{
+      width:100%;max-width:320px;padding:20px;
+      background:#fff;color:var(--blue);
+      border:none;border-radius:var(--radius);
+      font-size:18px;font-weight:800;
+      cursor:pointer;font-family:inherit;
+      box-shadow:0 4px 16px rgba(0,0,0,.2);
+      -webkit-tap-highlight-color:transparent;
+      transition:transform .1s,opacity .1s;
+    }
+    .btn-home-main:active{transform:scale(.97);opacity:.9}
+    .btn-home-sub{
+      width:100%;max-width:320px;padding:14px;
+      background:rgba(255,255,255,.15);color:#fff;
+      border:1.5px solid rgba(255,255,255,.3);border-radius:var(--radius);
+      font-size:15px;font-weight:600;
+      cursor:pointer;font-family:inherit;
+      -webkit-tap-highlight-color:transparent;
+      transition:background .1s;
+    }
+    .btn-home-sub:active{background:rgba(255,255,255,.25)}
+
+    /* ── Cards & Lists ── */
+    .container{max-width:640px;margin:0 auto}
+    .card{
+      background:#fff;border-radius:var(--radius);
+      padding:18px 16px;margin-bottom:12px;
+      box-shadow:var(--shadow);
+    }
+    .card-title{
+      font-size:14px;font-weight:700;color:var(--blue);
+      padding-bottom:12px;margin-bottom:14px;
+      border-bottom:2px solid var(--blue-light);
+      display:flex;align-items:center;gap:8px;
+    }
+    .card-title::before{
+      content:'';display:inline-block;width:4px;height:16px;
+      background:var(--blue-mid);border-radius:2px;
+    }
+
+    /* List items */
+    .list-item{
+      display:flex;align-items:center;
+      padding:16px 14px;border-bottom:1px solid var(--gray-100);
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+      border-radius:10px;gap:12px;transition:background .1s;
+    }
+    .list-item:last-child{border-bottom:none}
+    .list-item:active{background:var(--gray-100)}
+    .list-item-icon{font-size:22px;min-width:30px;text-align:center}
+    .list-item-text{flex:1}
+    .list-item-title{font-size:15px;font-weight:600}
+    .list-item-sub{font-size:12px;color:var(--gray-400);margin-top:2px}
+    .list-item-arrow{color:var(--gray-400);font-size:18px}
+
+    /* Category grid */
+    .cat-grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;
+    }
+    .cat-btn{
+      background:#fff;border:2px solid var(--gray-200);
+      border-radius:12px;padding:18px 10px;
+      text-align:center;cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+      transition:all .15s;font-family:inherit;
+    }
+    .cat-btn:active{background:var(--blue-light);border-color:var(--blue-mid)}
+    .cat-btn-icon{font-size:28px;margin-bottom:8px}
+    .cat-btn-label{font-size:13px;font-weight:700;color:var(--gray-800);line-height:1.3}
+
+    /* Info bar */
+    .info-bar{
+      background:var(--blue-light);border-radius:10px;
+      padding:12px 14px;margin-bottom:12px;
+      font-size:13px;color:var(--blue);
+    }
+    .info-bar-row{display:flex;gap:6px;margin-bottom:3px}
+    .info-bar-row:last-child{margin-bottom:0}
+    .info-label{font-weight:700;white-space:nowrap}
+    .info-value{color:var(--gray-800)}
+
+    /* Form fields */
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-grid.full{grid-template-columns:1fr}
+    .mb10{margin-bottom:10px}
+    .field{display:flex;flex-direction:column;gap:5px}
+    .field label{font-size:12px;font-weight:600;color:var(--gray-600)}
+    .field input,.field textarea,.field select{
+      width:100%;padding:11px 13px;
+      border:1.5px solid var(--gray-200);border-radius:8px;
+      font-size:16px;font-family:inherit;color:var(--gray-800);
+      background:#fff;-webkit-appearance:none;
+      transition:border-color .15s,box-shadow .15s;
+    }
+    .field input:focus,.field textarea:focus,.field select:focus{
+      outline:none;border-color:var(--blue-mid);
+      box-shadow:0 0 0 3px rgba(234,88,12,.18);
+    }
+    .field textarea{min-height:72px;resize:vertical}
+
+    /* Progress */
+    .progress-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;color:var(--gray-600)}
+    .progress-count{font-weight:700;color:var(--gray-800)}
+    .progress-bar-bg{height:8px;background:var(--gray-200);border-radius:4px;overflow:hidden}
+    .progress-bar-fill{height:100%;background:var(--green);border-radius:4px;transition:width .35s}
+    .all-check-row{display:flex;gap:8px;margin-top:10px}
+    .btn-sm{
+      flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:600;
+      border:1.5px solid var(--gray-200);background:var(--gray-50);color:var(--gray-600);
+      cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;
+    }
+    .btn-sm:active{background:var(--gray-200)}
+
+    /* Coupler selector */
+    .coupler-select{display:flex;gap:12px;margin:10px 0 14px}
+    .coupler-btn{
+      flex:1;padding:15px 8px;border-radius:10px;
+      border:2px solid var(--gray-200);background:#fff;
+      font-size:15px;font-weight:700;font-family:inherit;
+      cursor:pointer;text-align:center;color:var(--gray-600);
+      -webkit-tap-highlight-color:transparent;transition:all .15s;
+    }
+    .coupler-btn.active{border-color:var(--blue-mid);background:var(--blue-light);color:var(--blue-mid)}
+    .coupler-hint{font-size:13px;color:var(--gray-400);text-align:center;padding:10px 0;border-top:1px dashed var(--gray-200)}
+    .coupler-checks{display:none}
+    .coupler-checks.visible{display:block}
+
+    /* Check sections */
+    .section-header{
+      font-size:13px;font-weight:700;background:var(--blue);color:#fff;
+      padding:7px 12px;border-radius:7px;margin:14px 0 4px;
+    }
+    .section-header:first-child{margin-top:0}
+    .dir-badge{
+      display:inline-block;font-size:11px;font-weight:700;
+      background:var(--gray-600);color:#fff;
+      padding:2px 10px;border-radius:10px;margin:8px 0 4px;
+    }
+    .check-item{
+      display:flex;align-items:center;gap:14px;
+      padding:13px 6px;border-bottom:1px solid var(--gray-100);
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+      border-radius:6px;transition:background .1s;
+    }
+    .check-item:last-child{border-bottom:none}
+    .check-item:active{background:var(--gray-100)}
+    .check-item input[type="checkbox"]{display:none}
+    .checkmark{
+      width:30px;height:30px;min-width:30px;border-radius:7px;
+      border:2px solid var(--gray-200);background:#fff;
+      display:flex;align-items:center;justify-content:center;
+      transition:background .15s,border-color .15s;
+    }
+    .check-item input:checked~.checkmark{background:var(--green);border-color:var(--green)}
+    .check-item input:checked~.checkmark::after{
+      content:'';display:block;width:8px;height:13px;
+      border-right:2.5px solid #fff;border-bottom:2.5px solid #fff;
+      transform:rotate(45deg) translate(-1px,-1px);
+    }
+    .item-text{flex:1;font-size:15px;line-height:1.45}
+    .item-note{font-size:11px;color:var(--gray-400);margin-top:3px}
+    .input-item{padding:10px 6px;border-bottom:1px solid var(--gray-100)}
+    .input-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+    .input-row input,.input-row select{
+      flex:1;padding:9px 12px;border:1.5px solid var(--gray-200);
+      border-radius:8px;font-size:15px;font-family:inherit;
+      -webkit-appearance:none;background:#fff;
+    }
+    .input-row input:focus,.input-row select:focus{
+      outline:none;border-color:var(--blue-mid);
+    }
+    .input-unit{font-size:13px;color:var(--gray-600);white-space:nowrap}
+
+    /* Bottom bar */
+    .bottom-bar{
+      position:fixed;bottom:0;left:0;right:0;
+      background:#fff;padding:12px 14px;
+      padding-bottom:calc(12px + env(safe-area-inset-bottom));
+      box-shadow:0 -2px 12px rgba(0,0,0,.10);
+      display:flex;gap:10px;z-index:200;
+    }
+    .btn{
+      flex:1;padding:15px 8px;border-radius:12px;border:none;
+      font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;
+      -webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .1s;
+    }
+    .btn:active{opacity:.85;transform:scale(.97)}
+    .btn-primary{background:var(--blue-mid);color:#fff}
+    .btn-secondary{background:var(--gray-100);color:var(--gray-600);border:1.5px solid var(--gray-200)}
+    .btn-danger{background:#fee2e2;color:var(--red);border:1.5px solid #fecaca}
+
+    /* Master list */
+    .master-item{
+      display:flex;align-items:center;padding:14px 12px;
+      border-bottom:1px solid var(--gray-100);gap:12px;
+    }
+    .master-item-name{flex:1;font-size:15px;font-weight:600}
+    .master-item-sub{font-size:12px;color:var(--gray-400);margin-top:2px}
+    .master-item-del{
+      background:none;border:none;color:var(--gray-400);font-size:20px;
+      cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;
+    }
+    .master-item-del:active{color:var(--red)}
+
+    /* Add form */
+    .add-form{background:var(--gray-50);border-radius:10px;padding:14px;margin-bottom:12px}
+    .add-form-title{font-size:13px;font-weight:700;color:var(--gray-600);margin-bottom:10px}
+
+    /* Kana group header */
+    .kana-header{
+      font-size:12px;font-weight:700;color:var(--gray-600);
+      background:var(--gray-100);padding:5px 14px;
+      border-bottom:1px solid var(--gray-200);
+      cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .kana-header:active{background:var(--gray-200)}
+    .kana-arrow{font-size:11px;transition:transform .25s}
+    .kana-group-body{overflow:hidden;max-height:3000px;transition:max-height .3s ease}
+    .kana-group-body.collapsed{max-height:0}
+
+    /* Empty state */
+    .empty-state{text-align:center;padding:40px 20px;color:var(--gray-400)}
+    .empty-state p{margin-top:8px;font-size:14px}
+
+    /* Loading */
+    #loading{
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,.55);align-items:center;justify-content:center;z-index:1000;
+    }
+    #loading.show{display:flex}
+    .loading-box{
+      background:rgba(10,20,40,.92);color:#fff;
+      padding:28px 36px;border-radius:18px;text-align:center;font-size:15px;
+    }
+    .spinner{
+      width:42px;height:42px;
+      border:4px solid rgba(255,255,255,.25);border-top-color:#fff;
+      border-radius:50%;margin:0 auto 14px;
+      animation:spin .7s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Toast */
+    #toast{
+      display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+      background:rgba(10,20,40,.88);color:#fff;
+      padding:10px 20px;border-radius:20px;
+      font-size:13px;z-index:500;white-space:nowrap;
+    }
+    #toast.show{display:block}
+
+    /* PDF Preview Modal */
+    #pdf-preview-modal{
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,.6);z-index:700;
+      flex-direction:column;
+    }
+    #pdf-preview-modal.show{display:flex}
+    .pdf-preview-header{
+      background:var(--blue);color:#fff;
+      padding:14px 16px;display:flex;align-items:center;
+      justify-content:space-between;flex-shrink:0;
+    }
+    .pdf-preview-header h3{font-size:16px;font-weight:700}
+    .pdf-preview-body{
+      flex:1;overflow-y:auto;background:#e5e7eb;
+      padding:16px 10px;-webkit-overflow-scrolling:touch;
+    }
+    .pdf-preview-page{
+      background:#fff;max-width:720px;margin:0 auto;
+      padding:22px 20px;box-shadow:0 2px 12px rgba(0,0,0,.2);
+      font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Meiryo",sans-serif;
+      font-size:11px;line-height:1.45;color:#000;
+    }
+    .pdf-preview-footer{
+      background:#fff;padding:12px 14px;
+      padding-bottom:calc(12px + env(safe-area-inset-bottom));
+      box-shadow:0 -2px 12px rgba(0,0,0,.1);
+      display:flex;gap:10px;flex-shrink:0;
+    }
+
+    /* Info button */
+    .info-btn{
+      background:none;border:none;font-size:18px;
+      padding:2px 6px;cursor:pointer;line-height:1;
+      -webkit-tap-highlight-color:transparent;opacity:.7;
+      flex-shrink:0;
+    }
+    .info-btn:active{opacity:1}
+
+    /* Image Modal */
+    #img-modal{
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,.75);z-index:900;
+      align-items:center;justify-content:center;padding:20px;
+    }
+    #img-modal.show{display:flex}
+    #img-modal img{
+      max-width:100%;max-height:85vh;
+      border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);
+    }
+    #img-modal-close{
+      position:absolute;top:16px;right:16px;
+      background:rgba(255,255,255,.2);border:none;color:#fff;
+      font-size:24px;width:40px;height:40px;border-radius:50%;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;
+    }
+
+    /* Edit Modal */
+    #edit-modal{
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,.5);z-index:800;
+      align-items:center;justify-content:center;padding:20px;
+    }
+    #edit-modal.show{display:flex}
+    .edit-modal-box{
+      background:#fff;border-radius:var(--radius);
+      padding:22px 20px;width:100%;max-width:420px;
+      box-shadow:0 8px 32px rgba(0,0,0,.2);
+    }
+    .edit-modal-title{
+      font-size:16px;font-weight:700;color:var(--blue);
+      margin-bottom:16px;padding-bottom:10px;
+      border-bottom:2px solid var(--blue-light);
+    }
+    .edit-modal-actions{display:flex;gap:10px;margin-top:18px}
+
+    /* Search */
+    .search-wrap{margin-bottom:12px}
+    .search-input{
+      width:100%;padding:12px 16px;
+      border:1.5px solid var(--gray-200);border-radius:10px;
+      font-size:16px;font-family:inherit;background:#fff;
+      -webkit-appearance:none;
+    }
+    .search-input:focus{outline:none;border-color:var(--blue-mid)}
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Home                              -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+  <div class="home-body">
+    <div class="home-logo">
+      <h1>🔧 設備点検アプリ</h1>
+      <p>出荷前点検チェックリスト</p>
+    </div>
+    <div class="home-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">接続確認中…</span>
+    </div>
+    <button class="btn-home-main" onclick="goTo('screen-customer')">
+      ✅　点検を開始する
+    </button>
+    <button class="btn-home-sub" onclick="goTo('screen-master-menu')">
+      ⚙️　マスタ管理
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Customer Select                   -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-customer" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>得意先を選択</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="card">
+        <div class="card-title">得意先</div>
+        <div id="customer-list">
+          <div class="empty-state"><p>得意先が登録されていません<br>マスタ管理から追加してください</p></div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:4px" onclick="goTo('screen-master-customers')">
+        ＋ 得意先を新規追加
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Site Select                       -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-site" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>現場を選択</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="info-bar">
+        <div class="info-bar-row">
+          <span class="info-label">得意先：</span>
+          <span class="info-value" id="site-screen-customer"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">現場名</div>
+        <div id="site-list">
+          <div class="empty-state"><p>この得意先の現場がありません<br>マスタ管理から追加してください</p></div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:4px" onclick="goToAddSite()">
+        ＋ 現場を新規追加
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Category Select                   -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-category" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>機材カテゴリを選択</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="info-bar">
+        <div class="info-bar-row">
+          <span class="info-label">得意先：</span>
+          <span class="info-value" id="cat-screen-customer"></span>
+        </div>
+        <div class="info-bar-row">
+          <span class="info-label">現場名：</span>
+          <span class="info-value" id="cat-screen-site"></span>
+        </div>
+      </div>
+      <div class="cat-grid" id="category-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Equipment Select                  -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-equipment" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2 id="eq-screen-title">機材を選択</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="search-wrap">
+        <input type="search" class="search-input" placeholder="機材名を検索…" id="eq-search"
+          oninput="filterEquipment(this.value)">
+      </div>
+      <div class="card">
+        <div id="equipment-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Inspection Form                   -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-form" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2 id="form-title">点検チェックリスト</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <!-- 基本情報 -->
+      <div class="info-bar" id="form-info-bar"></div>
+
+      <!-- 入力フィールド -->
+      <div class="card">
+        <div class="card-title">検査情報</div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>機材番号（複数はカンマ区切り）</label>
+            <input type="text" id="f-eq-no" placeholder="例: HJ-001, HJ-002" oninput="updateCount(this.value)">
+          </div>
+        </div>
+        <div class="form-grid mb10">
+          <div class="field">
+            <label>出荷日</label>
+            <input type="date" id="f-ship-date">
+          </div>
+          <div class="field">
+            <label>検査日</label>
+            <input type="date" id="f-check-date">
+          </div>
+        </div>
+        <div class="form-grid full">
+          <div class="field">
+            <label>担当者</label>
+            <select id="f-inspector">
+              <option value="">担当者を選択してください</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 進捗 -->
+      <div class="card">
+        <div class="progress-row">
+          <span>チェック進捗</span>
+          <span class="progress-count" id="progress-text">0 / 0 完了</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="all-check-row">
+          <button class="btn-sm" onclick="setAllChecks(true)">全選択</button>
+          <button class="btn-sm" onclick="setAllChecks(false)">全解除</button>
+        </div>
+      </div>
+
+      <!-- 点検項目（動的生成） -->
+      <div id="form-sections"></div>
+
+      <!-- 備考 -->
+      <div class="card">
+        <div class="card-title">備考</div>
+        <div class="field">
+          <textarea id="f-remarks" placeholder="特記事項・メモを入力…"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn btn-secondary" onclick="resetFormChecks()">リセット</button>
+    <button class="btn btn-primary" onclick="openPdfPreview()">PDF プレビュー</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Master Menu                       -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-master-menu" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>マスタ管理</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="card" style="padding:0">
+        <div class="list-item" onclick="goTo('screen-master-customers')">
+          <div class="list-item-icon">🏢</div>
+          <div class="list-item-text">
+            <div class="list-item-title">得意先マスタ</div>
+            <div class="list-item-sub">得意先の追加・削除</div>
+          </div>
+          <div class="list-item-arrow">›</div>
+        </div>
+        <div class="list-item" onclick="goTo('screen-master-sites')">
+          <div class="list-item-icon">📍</div>
+          <div class="list-item-text">
+            <div class="list-item-title">現場マスタ</div>
+            <div class="list-item-sub">現場名の追加・削除（得意先に紐づき）</div>
+          </div>
+          <div class="list-item-arrow">›</div>
+        </div>
+        <div class="list-item" onclick="goTo('screen-master-staff')">
+          <div class="list-item-icon">👤</div>
+          <div class="list-item-text">
+            <div class="list-item-title">担当者マスタ</div>
+            <div class="list-item-sub">担当者の追加・削除</div>
+          </div>
+          <div class="list-item-arrow">›</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Master Customers                  -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-master-customers" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>得意先マスタ</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="add-form">
+        <div class="add-form-title">新規追加</div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>得意先名</label>
+            <input type="text" id="new-customer-name" placeholder="例：大阪建設株式会社">
+          </div>
+        </div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>ふりがな</label>
+            <input type="text" id="new-customer-kana" placeholder="例：おおさかけんせつかぶしきがいしゃ">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:12px" onclick="addCustomer()">追加する</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div id="master-customer-list">
+          <div class="empty-state"><p>得意先が登録されていません</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Master Sites                      -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-master-sites" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>現場マスタ</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="add-form">
+        <div class="add-form-title">新規追加</div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>得意先を選択</label>
+            <select id="new-site-customer">
+              <option value="">得意先を選択してください</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>現場名</label>
+            <input type="text" id="new-site-name" placeholder="例：〇〇橋架設工事">
+          </div>
+        </div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <label>ふりがな</label>
+            <input type="text" id="new-site-kana" placeholder="例：まるまるばしかせつこうじ">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:12px" onclick="addSite()">追加する</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div id="master-site-list">
+          <div class="empty-state"><p>現場が登録されていません</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- Screen: Master Staff                      -->
+<!-- ══════════════════════════════════════════ -->
+<div id="screen-master-staff" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" onclick="goBack()">‹ 戻る</button>
+    <h2>担当者マスタ</h2>
+  </div>
+  <div class="screen-body">
+    <div class="container">
+      <div class="add-form">
+        <div class="add-form-title">新規追加</div>
+        <div class="form-grid full mb10">
+          <div class="field">
+            <input type="text" id="new-staff-name" placeholder="担当者名を入力">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:12px" onclick="addStaff()">追加する</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div id="master-staff-list">
+          <div class="empty-state"><p>担当者が登録されていません</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF Preview Modal -->
+<div id="pdf-preview-modal">
+  <div class="pdf-preview-header">
+    <h3>📄 PDFプレビュー</h3>
+    <button class="back-btn" onclick="closePdfPreview()">✕ 閉じる</button>
+  </div>
+  <div class="pdf-preview-body">
+    <div class="pdf-preview-page" id="pdf-preview-content"></div>
+  </div>
+  <div class="pdf-preview-footer">
+    <button class="btn btn-secondary" onclick="closePdfPreview()">閉じる</button>
+    <button class="btn btn-primary" onclick="downloadPDF()">⬇️ ダウンロード</button>
+  </div>
+</div>
+
+<!-- Image Modal -->
+<div id="img-modal" onclick="closeImgModal()">
+  <button id="img-modal-close" onclick="closeImgModal()">✕</button>
+  <img id="img-modal-img" src="" alt="参照画像">
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" onclick="if(event.target===this)closeEditModal()">
+  <div class="edit-modal-box">
+    <div class="edit-modal-title" id="edit-modal-title">編集</div>
+    <div class="field mb10" id="edit-name-wrap">
+      <label id="edit-name-label">名前</label>
+      <input type="text" id="edit-name-input">
+    </div>
+    <div class="field" id="edit-kana-wrap">
+      <label>ふりがな</label>
+      <input type="text" id="edit-kana-input" placeholder="ひらがなで入力">
+    </div>
+    <div class="edit-modal-actions">
+      <button class="btn btn-secondary" onclick="closeEditModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEditModal()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading"><div class="loading-box"><div class="spinner"></div>PDF生成中…</div></div>
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════
+//  Firebase 初期化
+// ════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyDijH33A1CVLIK1wINPn3oZfU7w9iYfoHg",
+  authDomain: "tenken-app-osaka.firebaseapp.com",
+  databaseURL: "https://tenken-app-osaka-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tenken-app-osaka",
+  storageBucket: "tenken-app-osaka.firebasestorage.app",
+  messagingSenderId: "101845866637",
+  appId: "1:101845866637:web:7e3d7ef4e84f2c13f76ac4"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// 接続状態
+db.ref('.info/connected').on('value', snap => {
+  const online = snap.val() === true;
+  document.getElementById('status-dot').className = 'status-dot' + (online ? ' online' : '');
+  document.getElementById('status-text').textContent = online ? 'Firebase 接続済み' : 'オフライン';
+});
+
+// ════════════════════════════════════════════════
+//  機材マスタ
+// ════════════════════════════════════════════════
+const CATEGORIES = [
+  { id:'送り台',     label:'送り台',           form:'okuridai',     icon:'🔧' },
+  { id:'水平',       label:'水平ジャッキ',      form:'suihei',       icon:'↔️' },
+  { id:'トラニオン', label:'トラニオン',        form:'suihei',       icon:'🔩' },
+  { id:'H鋼クランプ',label:'H鋼クランプ',       form:'hkou',         icon:'🏗️' },
+  { id:'スライドジャッキ',label:'スライドジャッキ',form:'slide',     icon:'🔧' },
+  { id:'電動ポンプ', label:'電動ポンプ',        form:'pump',         icon:'⚡' },
+  { id:'レールクランプ',label:'レールクランプ',  form:'rail',         icon:'🛤️' },
+  { id:'シンクロ',   label:'シンクロジャッキ',  form:'synchro',      icon:'⚙️' },
+  { id:'送り装置',   label:'送り装置',          form:'okurisouchi',  icon:'🔄' },
+  { id:'駆動シンクロ',label:'駆動シンクロジャッキ',form:'drive_synchro',icon:'⚙️'},
+];
+
+const EQUIPMENT_MASTER = {
+  '送り台':['500kN±20st（簡易型）ベース φ143','500kN±20st（簡易型）ベース φ163','500kN簡易型用 推進ジャッキ','500kN送り台','1000kN送り台','1000kN±35st送り台（3軸対応型）','2000kN送り台','2000kN簡易型用送り台','3000kN送り台','3000kN50st送り台'],
+  '水平':['100kN1000st両端クレビス付油圧ジャッキ','150kN1000st両端クレビス付油圧ジャッキ','150kN1000st両端クレビス付油圧ジャッキ A','150kN1000st両端クレビス付油圧ジャッキ（光陽精機製）','押引150kN1500st両端クレビス付油圧ジャッキ A','押引150kN1500st両端クレビス付油圧ジャッキ B','押引300kN200st両端クレビス付油圧ジャッキ','押引300kN200st両端クレビス付油圧ジャッキ（光陽精機製）','押引300kN250st両端クレビス付油圧ジャッキ','押引300kN250st両端クレビス付油圧ジャッキ（光陽精機製）','300kN600st両端クレビス付油圧ジャッキ','300kN600st両端クレビス付油圧ジャッキ（光陽精機製）','300kN1300st両端クレビス付油圧ジャッキ','360kN1000st両端クレビス付油圧ジャッキ ロッド径80mm A','360kN1000st両端クレビス付油圧ジャッキ ロッド径70mm B','360kN1000st両端クレビス付油圧ジャッキ ロッド径80mm C','360kN1000st両端クレビス付油圧ジャッキ ロッド径80mm D','450kN1000st両端クレビス付油圧ジャッキ','500kN600st両端クレビス付油圧ジャッキ','500kN600st両端クレビス付油圧ジャッキ（光陽精機製）','500kN1050st両端クレビス付油圧ジャッキ A','500kN1050st両端クレビス付油圧ジャッキ（光陽精機製）','押引500kN1050st両端クレビス付油圧ジャッキ B','押引500kN1050st両端クレビス付油圧ジャッキ C','押引500kN1050st両端クレビス付油圧ジャッキ D','押引500kN1050st両端クレビス付油圧ジャッキ（光陽精機製）','500kN1400st両端クレビス付油圧ジャッキ A','500kN1400st両端クレビス付油圧ジャッキ B','500kN1400st両端クレビス付油圧ジャッキ C','押引700kN850st両端クレビス付油圧ジャッキ','押引700kN1700st両端クレビス付油圧ジャッキ','押引1200kN1100st両端クレビス付油圧ジャッキ','1200kN1350st両端クレビス付油圧ジャッキ'],
+  'トラニオン':['300kN500stトラニオン油圧ジャッキ','300kN1000stトラニオン油圧ジャッキ','450kN1000stトラニオン油圧ジャッキ タイプ1','450kN1000stトラニオン油圧ジャッキ タイプ2','450kN1000stトラニオン油圧ジャッキ タイプ3','450kN1000stトラニオン油圧ジャッキ タイプ4','450kN1000stトラニオン油圧ジャッキ タイプ5','450kN1000stトラニオン油圧ジャッキ タイプ6','450kN1000stトラニオン油圧ジャッキ タイプ7','450kN1000stトラニオン油圧ジャッキ タイプ8','500kN1000stトラニオン油圧ジャッキ タイプN','500kN1000stトラニオン油圧ジャッキ タイプN2','トラニオンブラケット'],
+  'H鋼クランプ':['H形鋼クランプ装置 H300 t15（ノーマル）','H形鋼クランプ装置 H300 t15（シーケンス）','H形鋼クランプ装置 H400 t21（ノーマル）','H形鋼クランプ装置 H400 t21（シーケンス）','H形鋼クランプ装置 H428 t35（ノーマル）','H形鋼クランプ装置 H500 t32（ノーマル）','スーパークランプ'],
+  'スライドジャッキ':['1000kN（500kN×2）スライドベース タイプA','1000kN（500kN×2）スライドベース タイプB','2000kN（1000kN×2）スライドベース','3000kN（1500kN×2）スライドベース','4000kN（2000kN×2）スライドベース'],
+  '電動ポンプ':['0.4kw電動油圧ポンプユニット（Si0）','0.75kW電動油圧ポンプユニット','0.75kW電動油圧ポンプユニット 軽量型','1.5kW電動油圧ポンプユニット','1.5kW電動油圧ポンプユニット カウンターバランス弁内蔵型','1.5kW電動油圧ポンプユニット カウンターバランス弁・アンロード弁内蔵型','1.5kw電動油圧ポンプユニット（Si1）','2.2kW電動油圧ポンプユニット','Mi2','3.7kW電動油圧ポンプユニット','5.5kW電動油圧ポンプユニット','7.5kW電動油圧ポンプユニット ER','7.5kW電動油圧ポンプユニット ERL','2.2kW2連異荷重電動油圧ポンプユニット','2.2kW4連異荷重電動油圧ポンプユニット','3.7kW2連異荷重電動油圧ポンプユニット','3.7kW2連異荷重電動油圧ポンプユニット（制御用）','Si3','3.7kW2連異荷重電動油圧ポンプユニット A 箱型','3.7kW2連異荷重電動油圧ポンプユニット B オルガン型','Mi3','3.7kW3連異荷重電動油圧ポンプユニット','3.7kW4連異荷重電動油圧ポンプユニット','5.5kW4連異荷重電動油圧ポンプユニット','送出し装置用電動油圧ポンプユニット（2連異荷重タイプ）','橋梁用多目的電動油圧ポンプユニット（22kW+2.2kW×2）','橋梁用多目的電動油圧ポンプユニット（22kW+3.7kW×2）','可変ポンプ 15kW+3.7kW×2','水平ライン専用電動ポンプユニット','モジュールポンプ'],
+  'レールクランプ':['37㎏レールクランプ装置（1・2型）','37㎏レールクランプ装置（3・4型）','37㎏レールクランプ装置（5・6型）','37㎏レールクランプ装置（専用）','300kN角レールクランプ','500kN角レールクランプ','レール用クランプ装置（73kgレール用）','レール用クランプ装置（40kgNレール用）'],
+  'シンクロ':['1200kNシンクロジャッキ','2000kNシンクロジャッキ','2500kNシンクロジャッキ','4000kNシンクロジャッキ','5000kNシンクロジャッキ'],
+  '送り装置':['3110kN送出し装置','3110kN送出し装置（シリンダー式）','4250kN送出し装置'],
+  '駆動シンクロ':['3000kN駆動シンクロジャッキ','6000kN駆動シンクロジャッキ'],
+};
+
+// ════════════════════════════════════════════════
+//  点検表定義
+// ════════════════════════════════════════════════
+// item types: check / select / number / text
+const FORMS = {
+  suihei:{
+    title:'水平ジャッキ チェックリスト', suffix:'水ジャ',
+    couplerSelect:true,
+    couplerGroups:[
+      {dir:'押',items:['緩んでいないか','先端はつぶれていないか','折れ曲がりはないか']},
+      {dir:'引',items:['緩んでいないか','先端はつぶれていないか','折れ曲がりはないか']}
+    ],
+    sections:[
+      {name:'ストローク伸ばし',items:[
+        {t:'check',text:'初動圧の確認'},
+        {t:'check',text:'ロッドに傷、へこみはないか',note:'ロッドは2〜3回出し入れする'},
+        {t:'check',text:'ダストシールから油もれはしていないか',note:'白ウエス等で油漏れを確認'}
+      ]},
+      {name:'安全弁の設定',items:[
+        {t:'check',text:'最高使用圧力の10％増し（最高60MPaまで）'}
+      ]},
+      {name:'耐圧テスト',items:[
+        {t:'check',text:'押側エンド（ジャッキ仕様圧力）'},
+        {t:'check',text:'中間で戻し側ホースを外す（10MPa）'},
+        {t:'check',text:'引き側エンド（30MPa）'}
+      ]},
+      {name:'球面軸受け',items:[
+        {t:'check',text:'動きの確認'},
+        {t:'check',text:'φ60ピンが入るかどうか'}
+      ]},
+      {name:'吊り金具の確認',items:[
+        {t:'check',text:'2箇所すべてついているか'},
+        {t:'check',text:'緩んでいないか（しっかりと締めること）'},
+        {t:'check',text:'Iボルトは曲がっていないか（曲がっていれば取換え）'}
+      ]}
+    ]
+  },
+
+  okuridai:{
+    title:'送り台 チェックリスト', suffix:'送り台',
+    sections:[
+      {name:'水平ジャッキ',items:[
+        {t:'check',text:'カプラー'},
+        {t:'check',text:'ダストシールから油もれはしていないか'},
+        {t:'check',text:'耐圧テスト'}
+      ]},
+      {name:'スライドジャッキ',items:[
+        {t:'check',text:'チャージは抜けていないか（10mm）',note:'チャージが減っていれば試験機でテスト'},
+        {t:'check',text:'油もれはしていないか'}
+      ]},
+      {name:'テフロン',items:[
+        {t:'select',label:'交換判定',options:['そのまま使用','交換']},
+        {t:'text',label:'交換履歴'},
+        {t:'check',text:'清掃'}
+      ]},
+      {name:'ベース',items:[
+        {t:'check',text:'キズはないか'},
+        {t:'check',text:'取手は外れていないか',note:'外れていなくても吊ったとき取れないか確認すること'},
+        {t:'check',text:'ガイドは折れて（曲がって）いないか'},
+        {t:'check',text:'ボルトは折れていないか'}
+      ]},
+      {name:'水平方向動作確認',items:[
+        {t:'check',text:'スムーズに動くか'}
+      ]},
+      {name:'塗装',items:[
+        {t:'check',text:'塗装の確認'}
+      ]},
+      {name:'組立',items:[
+        {t:'check',text:'組立て後スライドジャッキとベースを番線で固定'}
+      ]}
+    ]
+  },
+
+  hkou:{
+    title:'H鋼クランプ チェックリスト', suffix:'H鋼',
+    sections:[
+      {name:'バルブ',items:[
+        {t:'select',label:'バルブ',options:['有','無']},
+        {t:'check',text:'動作の確認'},
+        {t:'check',text:'作動圧力の確認',note:'締付時20MPa、解放時25MPa'}
+      ]},
+      {name:'外枠（アゴの長さ）',items:[
+        {t:'number',label:'外枠（アゴ）の長さ',unit:'mm',img:'images/H鋼クランプアゴ長さ.png'}
+      ]},
+      {name:'カプラー確認',items:[
+        {t:'check',text:'緩んでいないか'},
+        {t:'check',text:'つぶれていないか'}
+      ]},
+      {name:'ホース',items:[
+        {t:'check',text:'つぶれていないか'}
+      ]},
+      {name:'開閉ジャッキ',items:[
+        {t:'check',text:'クサビジャッキの作動確認'},
+        {t:'check',text:'耐圧テスト（40MPa）',note:'最高仕様圧力(67MPa)'},
+        {t:'check',text:'つなぎロッドの曲がり'}
+      ]},
+      {name:'フランジ厚調整',items:[
+        {t:'check',text:'調整'},
+        {t:'number',label:'フランジ厚',unit:'mm'}
+      ]},
+      {name:'ガイドブロック',items:[
+        {t:'check',text:'ボルトの緩み等'}
+      ]},
+      {name:'吊り金具の確認',items:[
+        {t:'check',text:'4箇所すべてついているか'},
+        {t:'check',text:'緩んでいないか（しっかりと締めること）'},
+        {t:'check',text:'Iボルトは曲がっていないか（曲がっていれば取換え）'}
+      ]}
+    ]
+  },
+
+  slide:{
+    title:'スライドジャッキ チェックリスト', suffix:'スライド',
+    sections:[
+      {name:'天板',items:[
+        {t:'check',text:'ユニバーサルの確認',note:'片側ボルトを外して天板を取り外す（ボルトと天板はセット）'},
+        {t:'check',text:'「天板吊禁止」の表示確認'}
+      ]},
+      {name:'耐圧テスト',items:[
+        {t:'check',text:'油もれはしていないか'},
+        {t:'check',text:'ガスは入っているか'},
+        {t:'check',text:'ストップバルブ作動'},
+        {t:'check',text:'動作確認（圧を抜いたときジャッキはスムーズに戻るか）'},
+        {t:'check',text:'耐圧テスト'}
+      ]},
+      {name:'チャージ',items:[
+        {t:'check',text:'チャージの確認（10mm）',note:'ハンドポンプでゆっくりチャージ。エア抜きは確実に（横にしてエア抜き）'}
+      ]},
+      {name:'方向修正ジャッキ',items:[
+        {t:'check',text:'カプラーはつぶれていないか'},
+        {t:'check',text:'動作確認（左右にスムーズに動くか）'},
+        {t:'check',text:'耐圧テスト'},
+        {t:'check',text:'ガイドバーを中央にセット'},
+        {t:'check',text:'ポート口の向き'}
+      ]},
+      {name:'ガイドブロック',items:[
+        {t:'check',text:'ボルトの緩みはないか'},
+        {t:'check',text:'ガイド幅の確認',note:'100ton・400ton→H400仕様→410mm / 200ton・300ton→H400仕様→420mm'}
+      ]},
+      {name:'ガイドバー',items:[
+        {t:'check',text:'ボルト穴のピッチ確認（60mm・65mm）'}
+      ]},
+      {name:'ボルト',items:[
+        {t:'check',text:'各部のボルトのゆるみはないか確認'}
+      ]},
+      {name:'テフロン',items:[
+        {t:'check',text:'溝はあるか',note:'8mm以上（無ければ交換）'}
+      ]}
+    ]
+  },
+
+  synchro:{
+    title:'シンクロジャッキ チェックリスト', suffix:'シンクロ',
+    sections:[
+      {name:'ジャッキテスト',items:[
+        {t:'check',text:'ストロークを伸ばす（キズ、曲がりはないか）'},
+        {t:'check',text:'耐圧テスト（押し上げバルブカットで60MPa）',note:'最高仕様圧力65MPa'},
+        {t:'check',text:'耐圧テスト（連通弁カット・押し上げオープンで手前30MPa・奥40MPa）'},
+        {t:'check',text:'カプラーのつぶれ'},
+        {t:'check',text:'ホースの曲がり'}
+      ]},
+      {name:'方向修正テスト',items:[
+        {t:'check',text:'耐圧テスト（40MPa）',note:'最高仕様圧力(押)49.1MPa・(戻)64.3MPa。ボトムをL型金具で振る'}
+      ]},
+      {name:'クローラー',items:[
+        {t:'check',text:'進行方向確認',img:'images/シンクロクローラー方向.png'},
+        {t:'check',text:'ゴムの具合'},
+        {t:'check',text:'ピンの具合'},
+        {t:'check',text:'枚数の確認'},
+        {t:'check',text:'手で回転するか'}
+      ]},
+      {name:'テフロン',items:[
+        {t:'check',text:'削れ、脱落等はないか',note:'テフロン板の厚みは15mm以上で'},
+        {t:'check',text:'500ton・400tonはテフロンと押上板が1枚物になっているか'}
+      ]},
+      {name:'テフロン押上板',items:[
+        {t:'check',text:'プライマーで塗装する'}
+      ]},
+      {name:'出荷準備',items:[
+        {t:'check',text:'吊り金具にφ24ボルト取付け'},
+        {t:'check',text:'本体・ベース間を番線でくくる'}
+      ]},
+      {name:'吊り金具の確認',items:[
+        {t:'check',text:'4箇所すべてついているか'},
+        {t:'check',text:'緩んでいないか（しっかりと締めること）'},
+        {t:'check',text:'Iボルトは曲がっていないか（曲がっていれば取り替え）'}
+      ]}
+    ]
+  },
+
+  rail:{
+    title:'レールクランプ チェックリスト', suffix:'レール',
+    sections:[
+      {name:'設定確認',items:[
+        {t:'check',text:'37K'},{t:'check',text:'50K'},
+        {t:'check',text:'50N'},{t:'check',text:'40N'}
+      ]},
+      {name:'ジャッキヘッド',items:[
+        {t:'check',text:'Ⅰ、Ⅱ、Ⅲ型有り'}
+      ]},
+      {name:'ローラー',items:[
+        {t:'check',text:'位置'},
+        {t:'check',text:'スナップリング 回り具合'}
+      ]},
+      {name:'クサビ（下部チャック）',items:[
+        {t:'check',text:'曲がり',note:'厚50K、薄37K'},
+        {t:'check',text:'折れ'}
+      ]},
+      {name:'耐圧テスト',items:[
+        {t:'check',text:'各レールをくわえてテスト（テスト圧力50MPa）',note:'最高仕様圧力(56.6MPa)'}
+      ]}
+    ]
+  },
+
+  okurisouchi:{
+    title:'送り装置 チェックリスト', suffix:'送り装置',
+    sections:[
+      {name:'ユニバーサルヘッド',items:[
+        {t:'check',text:'ボルトの折れ、曲がりはないか'},
+        {t:'check',text:'ボルトの出っぱりはないか'},
+        {t:'check',text:'作動（前・後）'}
+      ]},
+      {name:'方向修正ジャッキ',items:[
+        {t:'check',text:'左右耐圧チェック'},
+        {t:'check',text:'ゼロ点の位置'},
+        {t:'check',text:'左右スムーズに動くか'}
+      ]},
+      {name:'ベース',items:[
+        {t:'check',text:'キズはないか'},
+        {t:'check',text:'へこみはないか'},
+        {t:'text',label:'交換履歴（機材番号）'}
+      ]},
+      {name:'ネジシャフト',items:[
+        {t:'check',text:'キズはないか'},
+        {t:'check',text:'へたりはどうか'},
+        {t:'check',text:'摩耗はどうか'},
+        {t:'text',label:'交換履歴（機材番号）'}
+      ]},
+      {name:'チャージ',items:[
+        {t:'check',text:'チャージは抜けていないか'},
+        {t:'text',label:'Oリング交換履歴（機材番号）'}
+      ]},
+      {name:'目ネジ',items:[
+        {t:'check',text:'目ネジの減り具合はどうか'},
+        {t:'select',label:'分山①',options:['5分山','6分山','7分山','8分山','9分山','10分山']},
+        {t:'select',label:'判定①',options:['そのまま使用','交換']},
+        {t:'select',label:'分山②',options:['5分山','6分山','7分山','8分山','9分山','10分山']},
+        {t:'select',label:'判定②',options:['そのまま使用','交換']},
+        {t:'text',label:'目ネジ交換履歴（機材番号）'}
+      ]},
+      {name:'走行テスト',items:[
+        {t:'check',text:'ベースから油漏れはしていないか',note:'2台同時に行う'},
+        {t:'check',text:'速度・位置は同じか',note:'2台同時に行う'}
+      ]},
+      {name:'鉛直ジャッキ',items:[
+        {t:'check',text:'ロッドにサビ、キズ等はないか'},
+        {t:'check',text:'ダストシールはあるか'},
+        {t:'check',text:'耐圧テスト'},
+        {t:'check',text:'カプラーの折れ、つぶれはないか'},
+        {t:'check',text:'安全弁の設定'}
+      ]}
+    ]
+  },
+
+  pump:{
+    title:'電動ポンプ チェックリスト', suffix:'電動ポンプ',
+    sections:[
+      {name:'キャブタイヤ',items:[
+        {t:'number',label:'長さ',unit:'m'},
+        {t:'check',text:'端子処理'},
+        {t:'select',label:'連結部',options:['つなぎ物','一本物']},
+        {t:'check',text:'つなぎ部チェック'}
+      ]},
+      {name:'カプラー（3/8）',items:[
+        {t:'check',text:'カプラーの緩み'},
+        {t:'check',text:'先端のつぶれ'},
+        {t:'check',text:'折れ曲がり'}
+      ]},
+      {name:'カプラー（1/2）',items:[
+        {t:'check',text:'カプラーの緩み'},
+        {t:'check',text:'先端のつぶれ'},
+        {t:'check',text:'折れ曲がり'}
+      ]},
+      {name:'起動盤',items:[
+        {t:'check',text:'ボルトの緩み'},
+        {t:'check',text:'端子台'},
+        {t:'check',text:'漏電のチェック'},
+        {t:'check',text:'ヒューズ'}
+      ]},
+      {name:'3点ボタン / 2点ボタン',items:[
+        {t:'check',text:'3点ボタン 内部のチェック'},
+        {t:'check',text:'2点ボタン 内部のチェック'}
+      ]},
+      {name:'各種ランプ・スイッチ',items:[
+        {t:'check',text:'電球が切れていないか'},
+        {t:'check',text:'スイッチ類のチェック'}
+      ]},
+      {name:'モーター',items:[
+        {t:'check',text:'回転方向のチェック'}
+      ]},
+      {name:'貯油量',items:[
+        {t:'number',label:'貯油量',unit:'%'}
+      ]},
+      {name:'耐圧テスト',items:[
+        {t:'number',label:'鉛直方向A（押）',unit:'MPa'},
+        {t:'number',label:'鉛直方向B（押）',unit:'MPa'},
+        {t:'number',label:'水平方向（押）',unit:'MPa'},
+        {t:'check',text:'配管の油もれチェック'},
+        {t:'check',text:'ストップバルブチェック'},
+        {t:'check',text:'寸動ボタンチェック'}
+      ]},
+      {name:'連動・流量テスト',items:[
+        {t:'check',text:'押・戻ボタンは正しく反応しているか'},
+        {t:'check',text:'規定範囲の吐出がでているか'}
+      ]},
+      {name:'吊り金具の確認',items:[
+        {t:'check',text:'4箇所すべてついているか'},
+        {t:'check',text:'緩んでいないか（しっかりと締めること）'},
+        {t:'check',text:'Iボルトは曲がっていないか（曲がっていれば取換え）'}
+      ]},
+      {name:'カバー',items:[
+        {t:'select',label:'カバーの有無',options:['有','無']}
+      ]}
+    ]
+  },
+
+  drive_synchro:{
+    title:'駆動シンクロジャッキ チェックリスト', suffix:'駆動シンクロ',
+    sections:[
+      {name:'ジャッキテスト',items:[
+        {t:'check',text:'ストロークを伸ばす（キズ、曲がり、油漏れはないか）'},
+        {t:'check',text:'耐圧テスト（押し上げバルブカットで60MPa）',note:'最高仕様圧力 3000kN:63.7MPa / 6000kN:72.2MPa'},
+        {t:'check',text:'耐圧テスト（連通弁カット・モーター押し上げオープンで異荷重耐圧）'},
+        {t:'check',text:'カプラーのつぶれ（前後割り・左右割り）'},
+        {t:'check',text:'各接続部から油漏れはないか'}
+      ]},
+      {name:'方向修正テスト',items:[
+        {t:'check',text:'耐圧テスト（40MPa）',note:'最高仕様圧力(押・戻) 3000kN:44.3MPa / 6000kN:50.9MPa'}
+      ]},
+      {name:'油圧モーター',items:[
+        {t:'check',text:'押し上げJがスムーズに稼働するか（異音、引っかかりなど）'},
+        {t:'check',text:'問題なく回転するか（異音）/ホースに異常はないか'}
+      ]},
+      {name:'クローラー',items:[
+        {t:'check',text:'進行方向確認'},
+        {t:'check',text:'ゴムの具合'},
+        {t:'check',text:'クローラーの六角穴付き平ボルトの増し締め'},
+        {t:'check',text:'枚数の確認'},
+        {t:'check',text:'ピンの具合'},
+        {t:'check',text:'錆・傷が有れば研磨'}
+      ]},
+      {name:'出荷準備',items:[
+        {t:'check',text:'連結ブラケットの位置・ボルトの緩み/ホースカバーに異常はないか'}
+      ]},
+      {name:'吊り金具の確認',items:[
+        {t:'check',text:'4箇所すべてついているか（シャコ）'},
+        {t:'check',text:'緩んでいないか（しっかりと締めること）'}
+      ]},
+      {name:'テフロン・押し上げ',items:[
+        {t:'check',text:'窒素ガスは入っているか'},
+        {t:'check',text:'ユニバーサル機構は機能しているか'},
+        {t:'check',text:'BC材に返りは出ていないか'},
+        {t:'check',text:'削れ、脱落等はないか（テフロン板の厚みは15mm以上で）'},
+        {t:'check',text:'テフロンは15mm以下で必ず交換すること'}
+      ]},
+      {name:'その他',items:[
+        {t:'check',text:'前後配管・游車不可タイプ'},
+        {t:'check',text:'ダフニー交換済み'}
+      ]}
+    ]
+  }
+};
+
+// ════════════════════════════════════════════════
+//  アプリ状態
+// ════════════════════════════════════════════════
+const S = { customer:null, site:null, category:null, equipment:null, stack:[] };
+let allCheckIds = [], couplerType = null, couplerIds = {c1:[],c2:[]};
+let customers = {}, sites = {}, staff = {};
+
+// ════════════════════════════════════════════════
+//  画面管理
+// ════════════════════════════════════════════════
+function goTo(screenId) {
+  const cur = document.querySelector('.screen.active');
+  if (cur) { cur.classList.remove('active'); S.stack.push(cur.id); }
+  document.getElementById(screenId).classList.add('active');
+  // 画面固有の初期化
+  if (screenId === 'screen-customer')   renderCustomerList();
+  if (screenId === 'screen-site')       renderSiteList();
+  if (screenId === 'screen-category')   renderCategories();
+  if (screenId === 'screen-master-customers') renderMasterCustomers();
+  if (screenId === 'screen-master-sites')     renderMasterSites();
+  if (screenId === 'screen-master-staff')     renderMasterStaff();
+}
+
+function goBack() {
+  if (!S.stack.length) return;
+  document.querySelector('.screen.active').classList.remove('active');
+  document.getElementById(S.stack.pop()).classList.add('active');
+}
+
+function goToAddSite() {
+  // 現場追加画面へ、得意先を事前選択
+  goTo('screen-master-sites');
+  if (S.customer) {
+    const sel = document.getElementById('new-site-customer');
+    if (sel) sel.value = S.customer.id;
+  }
+}
+
+// ════════════════════════════════════════════════
+//  Firebase CRUD
+// ════════════════════════════════════════════════
+function loadMasters() {
+  db.ref('customers').on('value', snap => {
+    customers = snap.val() || {};
+    // 現在の画面が customer/site/master 系なら再描画
+    const active = document.querySelector('.screen.active')?.id;
+    if (active === 'screen-customer') renderCustomerList();
+    if (active === 'screen-master-customers') renderMasterCustomers();
+    if (active === 'screen-master-sites') renderMasterSites();
+  });
+  db.ref('sites').on('value', snap => {
+    sites = snap.val() || {};
+    const active = document.querySelector('.screen.active')?.id;
+    if (active === 'screen-site') renderSiteList();
+    if (active === 'screen-master-sites') renderMasterSites();
+  });
+  db.ref('staff').on('value', snap => {
+    staff = snap.val() || {};
+    const active = document.querySelector('.screen.active')?.id;
+    if (active === 'screen-master-staff') renderMasterStaff();
+    if (active === 'screen-form') populateInspectorSelect();
+  });
+}
+
+function addStaff() {
+  const name = document.getElementById('new-staff-name').value.trim();
+  if (!name) { showToast('担当者名を入力してください'); return; }
+  db.ref('staff').push({ name, createdAt: Date.now() }, err => {
+    if (err) { showToast('保存に失敗しました'); return; }
+    document.getElementById('new-staff-name').value = '';
+    showToast(`"${name}" を追加しました`);
+  });
+}
+
+function deleteStaff(id) {
+  if (!confirm('この担当者を削除しますか？')) return;
+  db.ref('staff/' + id).remove();
+}
+
+// ════════════════════════════════════════════════
+//  編集モーダル
+// ════════════════════════════════════════════════
+let _editState = {};
+
+function openEditModal(type, id, name, kana) {
+  _editState = { type, id };
+  const titles = { customer:'得意先を編集', site:'現場を編集', staff:'担当者を編集' };
+  const labels = { customer:'得意先名', site:'現場名', staff:'担当者名' };
+  document.getElementById('edit-modal-title').textContent = titles[type] || '編集';
+  document.getElementById('edit-name-label').textContent = labels[type] || '名前';
+  document.getElementById('edit-name-input').value = name || '';
+  document.getElementById('edit-kana-input').value = kana || '';
+  document.getElementById('edit-kana-wrap').style.display = type === 'staff' ? 'none' : '';
+  document.getElementById('edit-modal').classList.add('show');
+  document.getElementById('edit-name-input').focus();
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('show');
+  _editState = {};
+}
+
+function saveEditModal() {
+  const name = document.getElementById('edit-name-input').value.trim();
+  const kana = document.getElementById('edit-kana-input').value.trim();
+  const { type, id } = _editState;
+  if (!name) { showToast('名前を入力してください'); return; }
+  if (type !== 'staff' && !kana) { showToast('ふりがなを入力してください'); return; }
+
+  const refMap = { customer:'customers/', site:'sites/', staff:'staff/' };
+  const data = type === 'staff' ? { name } : { name, kana };
+  db.ref(refMap[type] + id).update(data, err => {
+    if (err) { showToast('保存に失敗しました'); return; }
+    showToast('更新しました');
+    closeEditModal();
+  });
+}
+
+function editCustomer(id, name, kana) { openEditModal('customer', id, name, kana); }
+function editSite(id, name, kana)     { openEditModal('site',     id, name, kana); }
+function editStaff(id, name)          { openEditModal('staff',    id, name, '');   }
+
+function renderMasterStaff() {
+  const el = document.getElementById('master-staff-list');
+  const list = Object.entries(staff);
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><p>担当者が登録されていません</p></div>'; return;
+  }
+  el.innerHTML = list.map(([id, v]) => `
+    <div class="master-item">
+      <div class="master-item-name">${esc(v.name)}</div>
+      <button class="master-item-del" onclick="editStaff('${id}','${esc(v.name)}')">✏️</button>
+      <button class="master-item-del" onclick="deleteStaff('${id}')">🗑</button>
+    </div>`).join('');
+}
+
+function populateInspectorSelect() {
+  const sel = document.getElementById('f-inspector');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">担当者を選択してください</option>' +
+    Object.entries(staff).map(([id, v]) =>
+      `<option value="${esc(v.name)}" ${v.name === prev ? 'selected' : ''}>${esc(v.name)}</option>`
+    ).join('');
+}
+
+function addCustomer() {
+  const name = document.getElementById('new-customer-name').value.trim();
+  const kana = document.getElementById('new-customer-kana').value.trim();
+  if (!name) { showToast('得意先名を入力してください'); return; }
+  if (!kana) { showToast('ふりがなを入力してください'); return; }
+  const ref = db.ref('customers').push();
+  ref.set({ name, kana, createdAt: Date.now() }, err => {
+    if (err) { showToast('保存に失敗しました'); return; }
+    document.getElementById('new-customer-name').value = '';
+    document.getElementById('new-customer-kana').value = '';
+    showToast(`"${name}" を追加しました`);
+  });
+}
+
+function deleteCustomer(id) {
+  if (!confirm('削除しますか？この得意先の現場もすべて削除されます。')) return;
+  db.ref('customers/' + id).remove();
+  // 紐づく現場も削除
+  Object.entries(sites).forEach(([sid, sv]) => {
+    if (sv.customerId === id) db.ref('sites/' + sid).remove();
+  });
+}
+
+function addSite() {
+  const custId = document.getElementById('new-site-customer').value;
+  const name   = document.getElementById('new-site-name').value.trim();
+  const kana   = document.getElementById('new-site-kana').value.trim();
+  if (!custId) { showToast('得意先を選択してください'); return; }
+  if (!name)   { showToast('現場名を入力してください'); return; }
+  if (!kana)   { showToast('ふりがなを入力してください'); return; }
+  db.ref('sites').push({ name, kana, customerId: custId, createdAt: Date.now() }, err => {
+    if (err) { showToast('保存に失敗しました'); return; }
+    document.getElementById('new-site-name').value = '';
+    document.getElementById('new-site-kana').value = '';
+    showToast(`"${name}" を追加しました`);
+  });
+}
+
+function deleteSite(id) {
+  if (!confirm('この現場を削除しますか？')) return;
+  db.ref('sites/' + id).remove();
+}
+
+// ════════════════════════════════════════════════
+//  リスト描画
+// ════════════════════════════════════════════════
+function renderCustomerList() {
+  const el = document.getElementById('customer-list');
+  const list = Object.entries(customers);
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><p>得意先が登録されていません<br>下の「得意先を新規追加」から追加してください</p></div>';
+    return;
+  }
+  el.innerHTML = groupByKana(list).map(({ group, items }) => {
+    const gid = 'cg-' + group;
+    return `<div class="kana-header" onclick="toggleKanaGroup('${gid}')">
+        ${group}<span class="kana-arrow" id="arr-${gid}">▼</span>
+      </div>
+      <div class="kana-group-body" id="${gid}">` +
+      items.map(([id, v]) => `
+      <div class="list-item" onclick="selectCustomer('${id}','${esc(v.name)}')">
+        <div class="list-item-icon">🏢</div>
+        <div class="list-item-text">
+          <div class="list-item-title">${esc(v.name)}</div>
+          <div class="list-item-sub">${esc(v.kana || '')}</div>
+        </div>
+        <div class="list-item-arrow">›</div>
+      </div>`).join('') +
+      `</div>`;
+  }).join('');
+}
+
+function selectCustomer(id, name) {
+  S.customer = { id, name };
+  document.getElementById('site-screen-customer').textContent = name;
+  goTo('screen-site');
+}
+
+function renderSiteList() {
+  const el = document.getElementById('site-list');
+  if (!S.customer) return;
+  document.getElementById('site-screen-customer').textContent = S.customer.name;
+  const list = Object.entries(sites).filter(([,v]) => v.customerId === S.customer.id);
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><p>この得意先の現場がありません</p></div>';
+    return;
+  }
+  el.innerHTML = list.map(([id, v]) => `
+    <div class="list-item" onclick="selectSite('${id}','${esc(v.name)}')">
+      <div class="list-item-icon">📍</div>
+      <div class="list-item-text"><div class="list-item-title">${esc(v.name)}</div></div>
+      <div class="list-item-arrow">›</div>
+    </div>`).join('');
+}
+
+function selectSite(id, name) {
+  S.site = { id, name };
+  document.getElementById('cat-screen-customer').textContent = S.customer.name;
+  document.getElementById('cat-screen-site').textContent = name;
+  goTo('screen-category');
+}
+
+function renderCategories() {
+  document.getElementById('cat-screen-customer').textContent = S.customer?.name || '';
+  document.getElementById('cat-screen-site').textContent = S.site?.name || '';
+  document.getElementById('category-grid').innerHTML = CATEGORIES.map(c => `
+    <button class="cat-btn" onclick="selectCategory('${c.id}')">
+      <div class="cat-btn-icon">${c.icon}</div>
+      <div class="cat-btn-label">${c.label}</div>
+    </button>`).join('');
+}
+
+function selectCategory(id) {
+  S.category = CATEGORIES.find(c => c.id === id);
+  S.equipment = null;
+  document.getElementById('eq-screen-title').textContent = S.category.label;
+  renderEquipmentList(EQUIPMENT_MASTER[id] || []);
+  document.getElementById('eq-search').value = '';
+  goTo('screen-equipment');
+}
+
+function renderEquipmentList(items) {
+  const el = document.getElementById('equipment-list');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><p>機材が見つかりません</p></div>'; return;
+  }
+  el.innerHTML = items.map(name => `
+    <div class="list-item" onclick="selectEquipment('${esc(name)}')">
+      <div class="list-item-icon">🔩</div>
+      <div class="list-item-text"><div class="list-item-title">${esc(name)}</div></div>
+      <div class="list-item-arrow">›</div>
+    </div>`).join('');
+}
+
+function filterEquipment(q) {
+  const all = EQUIPMENT_MASTER[S.category?.id] || [];
+  renderEquipmentList(q ? all.filter(n => n.includes(q)) : all);
+}
+
+function selectEquipment(name) {
+  S.equipment = name;
+  openForm();
+}
+
+// ════════════════════════════════════════════════
+//  マスタ管理 描画
+// ════════════════════════════════════════════════
+function renderMasterCustomers() {
+  const el = document.getElementById('master-customer-list');
+  const list = Object.entries(customers);
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><p>得意先が登録されていません</p></div>'; return;
+  }
+  el.innerHTML = groupByKana(list).map(({ group, items }) => {
+    const gid = 'mg-' + group;
+    return `<div class="kana-header" onclick="toggleKanaGroup('${gid}')">
+        ${group}<span class="kana-arrow" id="arr-${gid}">▼</span>
+      </div>
+      <div class="kana-group-body" id="${gid}">` +
+      items.map(([id, v]) => `
+      <div class="master-item">
+        <div>
+          <div class="master-item-name">${esc(v.name)}</div>
+          <div class="master-item-sub">${esc(v.kana || '')}</div>
+        </div>
+        <button class="master-item-del" onclick="editCustomer('${id}','${esc(v.name)}','${esc(v.kana||'')}')">✏️</button>
+        <button class="master-item-del" onclick="deleteCustomer('${id}')">🗑</button>
+      </div>`).join('') +
+      `</div>`;
+  }).join('');
+}
+
+function renderMasterSites() {
+  // 得意先セレクトを更新
+  const sel = document.getElementById('new-site-customer');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">得意先を選択してください</option>' +
+    Object.entries(customers).map(([id, v]) =>
+      `<option value="${id}" ${id === prev ? 'selected' : ''}>${esc(v.name)}</option>`
+    ).join('');
+
+  const el = document.getElementById('master-site-list');
+  const list = Object.entries(sites);
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><p>現場が登録されていません</p></div>'; return;
+  }
+  const sorted = list.slice().sort((a,b) => (a[1].kana||a[1].name).localeCompare(b[1].kana||b[1].name, 'ja'));
+  el.innerHTML = sorted.map(([id, v]) => `
+    <div class="master-item">
+      <div>
+        <div class="master-item-name">${esc(v.name)}</div>
+        <div class="master-item-sub">${esc(v.kana || '')}　${esc(customers[v.customerId]?.name || '不明')}</div>
+      </div>
+      <button class="master-item-del" onclick="editSite('${id}','${esc(v.name)}','${esc(v.kana||'')}')">✏️</button>
+      <button class="master-item-del" onclick="deleteSite('${id}')">🗑</button>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════
+//  フォーム構築
+// ════════════════════════════════════════════════
+function openForm() {
+  const form = FORMS[S.category.form];
+  document.getElementById('form-title').textContent = form.title;
+
+  // 情報バー
+  document.getElementById('form-info-bar').innerHTML = `
+    <div class="info-bar-row"><span class="info-label">得意先：</span><span class="info-value">${esc(S.customer.name)}</span></div>
+    <div class="info-bar-row"><span class="info-label">現場名：</span><span class="info-value">${esc(S.site.name)}</span></div>
+    <div class="info-bar-row"><span class="info-label">機材名：</span><span class="info-value">${esc(S.equipment)}</span></div>
+    <div class="info-bar-row"><span class="info-label">台数：</span><span class="info-value" id="info-count">－</span></div>`;
+
+  // 日付
+  const t = new Date();
+  const dateStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  document.getElementById('f-check-date').value = dateStr;
+  document.getElementById('f-ship-date').value = '';
+  document.getElementById('f-eq-no').value = '';
+  document.getElementById('f-remarks').value = '';
+  populateInspectorSelect();
+
+  // 点検セクション構築
+  buildFormSections(form);
+  goTo('screen-form');
+  document.getElementById('screen-form').querySelector('.screen-body').scrollTop = 0;
+}
+
+function buildFormSections(form) {
+  const container = document.getElementById('form-sections');
+  container.innerHTML = '';
+  allCheckIds = [];
+  couplerType = null;
+  couplerIds = { c1:[], c2:[] };
+
+  // カプラー選択（水平ジャッキ / トラニオン）
+  if (form.couplerSelect) {
+    const card = makeCard('カプラー');
+    card.innerHTML += `<p style="font-size:13px;color:var(--gray-600);margin-bottom:10px">取り付けるカプラーの種類を選択してください</p>
+      <div class="coupler-select">
+        <button class="coupler-btn" id="cbtn-c1" onclick="selCoupler('c1')">3/8（BS）</button>
+        <button class="coupler-btn" id="cbtn-c2" onclick="selCoupler('c2')">1/2（BS）</button>
+      </div>
+      <div id="coupler-div-c1" class="coupler-checks"></div>
+      <div id="coupler-div-c2" class="coupler-checks"></div>
+      <div class="coupler-hint" id="coupler-hint">↑ 種類を選ぶとチェック項目が表示されます</div>`;
+
+    ['c1','c2'].forEach(key => {
+      const div = card.querySelector(`#coupler-div-${key}`);
+      couplerIds[key] = [];
+      form.couplerGroups.forEach(grp => {
+        const badge = document.createElement('div');
+        badge.className = 'dir-badge'; badge.textContent = grp.dir;
+        div.appendChild(badge);
+        grp.items.forEach(text => {
+          const id = `cp-${key}-${couplerIds[key].length}`;
+          couplerIds[key].push(id);
+          div.appendChild(makeCheckItem(id, text, null));
+        });
+      });
+    });
+    container.appendChild(card);
+  }
+
+  // 通常セクション
+  form.sections.forEach(sec => {
+    const card = makeCard(sec.name);
+    let idSeq = 0;
+    sec.items.forEach(item => {
+      const id = `fi-${sec.name}-${idSeq++}`;
+      if (item.t === 'check') {
+        allCheckIds.push(id);
+        card.appendChild(makeCheckItem(id, item.text, item.note, item.img));
+      } else if (item.t === 'select') {
+        card.appendChild(makeSelectItem(id, item.label, item.options));
+      } else if (item.t === 'number') {
+        card.appendChild(makeNumberItem(id, item.label, item.unit, item.img));
+      } else if (item.t === 'text') {
+        card.appendChild(makeTextItem(id, item.label));
+      }
+    });
+    container.appendChild(card);
+  });
+
+  updateProgress();
+}
+
+function makeCard(title) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const h = document.createElement('div');
+  h.className = 'section-header'; h.textContent = title;
+  card.appendChild(h);
+  return card;
+}
+
+function makeCheckItem(id, text, note, img) {
+  const lbl = document.createElement('label');
+  lbl.className = 'check-item'; lbl.htmlFor = id;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.id = id;
+  cb.addEventListener('change', updateProgress);
+  const mark = document.createElement('div'); mark.className = 'checkmark';
+  const td = document.createElement('div'); td.className = 'item-text'; td.textContent = text;
+  if (note) {
+    const n = document.createElement('div'); n.className = 'item-note'; n.textContent = '※ '+note;
+    td.appendChild(n);
+  }
+  lbl.appendChild(cb); lbl.appendChild(mark); lbl.appendChild(td);
+  if (img) {
+    const btn = document.createElement('button');
+    btn.className = 'info-btn';
+    btn.textContent = 'ℹ️';
+    btn.type = 'button';
+    btn.onclick = e => { e.preventDefault(); showInfoImage(img); };
+    lbl.appendChild(btn);
+  }
+  return lbl;
+}
+
+function makeSelectItem(id, label, options) {
+  const wrap = document.createElement('div'); wrap.className = 'input-item';
+  wrap.innerHTML = `<div style="font-size:14px;margin-bottom:4px">${esc(label)}</div>
+    <div class="input-row">
+      <select id="${id}">
+        ${options.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+      </select>
+    </div>`;
+  return wrap;
+}
+
+function makeNumberItem(id, label, unit, img) {
+  const wrap = document.createElement('div'); wrap.className = 'input-item';
+  const infoBtn = img ? `<button type="button" class="info-btn" onclick="showInfoImage('${img}')">ℹ️</button>` : '';
+  wrap.innerHTML = `<div style="font-size:14px;margin-bottom:4px;display:flex;align-items:center;gap:4px">${esc(label)}${infoBtn}</div>
+    <div class="input-row">
+      <input type="number" id="${id}" inputmode="decimal" placeholder="0">
+      <span class="input-unit">${esc(unit)}</span>
+    </div>`;
+  return wrap;
+}
+
+function makeTextItem(id, label) {
+  const wrap = document.createElement('div'); wrap.className = 'input-item';
+  wrap.innerHTML = `<div style="font-size:14px;margin-bottom:4px">${esc(label)}</div>
+    <div class="input-row"><input type="text" id="${id}" placeholder="入力…"></div>`;
+  return wrap;
+}
+
+// カプラー選択
+function selCoupler(key) {
+  couplerType = key;
+  ['c1','c2'].forEach(k => {
+    document.getElementById(`cbtn-${k}`)?.classList.toggle('active', k===key);
+    document.getElementById(`coupler-div-${k}`)?.classList.toggle('visible', k===key);
+  });
+  document.getElementById('coupler-hint').style.display = 'none';
+  updateProgress();
+}
+
+// ════════════════════════════════════════════════
+//  進捗
+// ════════════════════════════════════════════════
+function getActiveIds() {
+  const coupler = couplerType ? couplerIds[couplerType] : [];
+  return [...coupler, ...allCheckIds];
+}
+
+function updateProgress() {
+  const ids = getActiveIds();
+  const done = ids.filter(id => document.getElementById(id)?.checked).length;
+  document.getElementById('progress-text').textContent = `${done} / ${ids.length} 完了`;
+  document.getElementById('progress-fill').style.width = ids.length ? `${done/ids.length*100}%` : '0%';
+}
+
+function setAllChecks(val) {
+  getActiveIds().forEach(id => { const el = document.getElementById(id); if(el) el.checked = val; });
+  updateProgress();
+}
+
+function resetFormChecks() {
+  if (!confirm('チェックをリセットしますか？')) return;
+  [...couplerIds.c1,...couplerIds.c2,...allCheckIds]
+    .forEach(id => { const el = document.getElementById(id); if(el) el.checked = false; });
+  // カプラーリセット
+  if (couplerType) {
+    document.getElementById(`cbtn-${couplerType}`)?.classList.remove('active');
+    document.getElementById(`coupler-div-${couplerType}`)?.classList.remove('visible');
+    const hint = document.getElementById('coupler-hint');
+    if (hint) hint.style.display = '';
+    couplerType = null;
+  }
+  updateProgress();
+}
+
+// ════════════════════════════════════════════════
+//  PDF 生成
+// ════════════════════════════════════════════════
+function openPdfPreview() {
+  const form = FORMS[S.category.form];
+  if (form.couplerSelect && !couplerType) { alert('カプラーの種類を選択してください'); return; }
+  document.getElementById('pdf-preview-content').innerHTML = buildPrintHTML(form);
+  document.getElementById('pdf-preview-modal').classList.add('show');
+}
+
+function closePdfPreview() {
+  document.getElementById('pdf-preview-modal').classList.remove('show');
+}
+
+async function downloadPDF() {
+  const form = FORMS[S.category.form];
+  closePdfPreview();
+
+  const site      = S.site.name;
+  const inspectorFull = document.getElementById('f-inspector').value.trim();
+  const inspector = inspectorFull.split(/[\s　]/)[0];
+  const t         = new Date();
+  const ds        = `${t.getFullYear()}${String(t.getMonth()+1).padStart(2,'0')}${String(t.getDate()).padStart(2,'0')}`;
+  const fname     = `${site}_${ds}_${form.suffix}_${inspector}.pdf`;
+
+  showLoading(true);
+  try {
+    const div = document.createElement('div');
+    div.style.cssText = 'position:fixed;left:-9999px;top:0;width:720px;padding:22px 28px;background:#fff;color:#000;font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic Medium","Meiryo",sans-serif;font-size:11px;line-height:1.45';
+    div.innerHTML = buildPrintHTML(form);
+    document.body.appendChild(div);
+    await new Promise(r => setTimeout(r, 200));
+
+    const canvas = await html2canvas(div, { scale:2, useCORS:true, logging:false, backgroundColor:'#fff', windowWidth:720 });
+    document.body.removeChild(div);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','mm','a4');
+    const mL=10, mT=10, pW=190, pH=277;
+    const pxPerMm = canvas.width/pW;
+    const pageH   = pH * pxPerMm;
+    const pages   = Math.ceil(canvas.height / pageH);
+
+    for (let p=0; p<pages; p++) {
+      if (p>0) pdf.addPage();
+      const slH = Math.min(pageH, canvas.height - p*pageH);
+      const tmp = document.createElement('canvas');
+      tmp.width = canvas.width; tmp.height = slH;
+      tmp.getContext('2d').drawImage(canvas, 0, -p*pageH);
+      pdf.addImage(tmp.toDataURL('image/jpeg',0.93),'JPEG',mL,mT,pW,slH/pxPerMm);
+    }
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isIOS) {
+      // iOS Safari：新しいタブで開いてシェアシートから保存
+      const blob = pdf.output('blob');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('ブラウザでPDFが開きます。共有ボタンから保存してください');
+    } else {
+      pdf.save(fname);
+      showToast(`"${fname}" を保存しました`);
+    }
+  } catch(e) {
+    alert('PDF生成エラー:\n'+e.message); console.error(e);
+  } finally { showLoading(false); }
+}
+
+function buildPrintHTML(form) {
+  const fmtDate = s => {
+    if (!s) return '　年　月　日';
+    const [y,m,d] = s.split('-');
+    return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+  };
+  const v = id => document.getElementById(id)?.value || '';
+  const cName = couplerType === 'c1' ? '3/8（BS）' : couplerType === 'c2' ? '1/2（BS）' : '';
+
+  const info = `<table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px;">
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;width:14%;">名称</td>
+        <td colspan="3" style="border:1px solid #aaa;padding:4px 7px;">${esc(S.equipment)}</td></tr>
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">機材番号</td>
+        <td style="border:1px solid #aaa;padding:4px 7px;">${esc(v('f-eq-no'))}</td>
+        <td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;width:10%;">台数</td>
+        <td style="border:1px solid #aaa;padding:4px 7px;width:18%;">${(() => { const n = v('f-eq-no').trim(); return n ? n.split(',').map(s=>s.trim()).filter(s=>s).length + '台' : '－'; })()}</td></tr>
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">御得意先名</td>
+        <td colspan="3" style="border:1px solid #aaa;padding:4px 7px;">${esc(S.customer.name)}</td></tr>
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">現場名</td>
+        <td colspan="3" style="border:1px solid #aaa;padding:4px 7px;">${esc(S.site.name)}</td></tr>
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">出荷日</td>
+        <td style="border:1px solid #aaa;padding:4px 7px;">${fmtDate(v('f-ship-date'))}</td>
+        <td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">検査日</td>
+        <td style="border:1px solid #aaa;padding:4px 7px;">${fmtDate(v('f-check-date'))}</td></tr>
+    <tr><td style="background:#ffedd5;border:1px solid #aaa;padding:4px 7px;font-weight:bold;">担当者</td>
+        <td colspan="3" style="border:1px solid #aaa;padding:4px 7px;">${esc(v('f-inspector'))}</td></tr>
+  </table>`;
+
+  // 総項目数でシングル/ダブル列を決定（20項目以下は1列のまま）
+  let totalItems = 0;
+  if (form.couplerGroups) form.couplerGroups.forEach(g => totalItems += g.items.length);
+  form.sections.forEach(s => totalItems += s.items.length);
+  const forceSingle = totalItems <= 20;
+
+  let rows = '';
+  const secRow  = name => `<tr><td colspan="4" style="background:#9a3412;color:#fff;font-weight:bold;padding:4px 8px;font-size:10px;">${esc(name)}</td></tr>`;
+  const dirRow  = d    => `<tr><td colspan="4" style="background:#f1f5f9;padding:2px 8px;font-size:9px;"><span style="background:#64748b;color:#fff;padding:1px 6px;border-radius:6px;">${d}</span></td></tr>`;
+  const mark    = ok   => ok ? `<span style="color:#16a34a;font-size:13px;font-weight:bold;">✓</span>` : `<span style="color:#bbb;font-size:11px;">□</span>`;
+
+  // 1項目（colspan=3でテキスト、結果は4列目）
+  const chkRow1 = (text, note, checked) => {
+    const n = note ? `<div style="font-size:8px;color:#888;margin-top:1px;">※${esc(note)}</div>` : '';
+    return `<tr><td colspan="3" style="padding:3px 6px;border:1px solid #ddd;font-size:10px;">${esc(text)}${n}</td><td style="padding:3px 4px;border:1px solid #ddd;text-align:center;">${mark(checked)}</td></tr>`;
+  };
+  // 2項目並列（colgroup由来の等幅）
+  const chkRow2 = (t1,c1,t2,c2) =>
+    `<tr><td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;">${esc(t1)}</td><td style="padding:3px 4px;border:1px solid #ddd;text-align:center;">${mark(c1)}</td><td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;">${esc(t2)}</td><td style="padding:3px 4px;border:1px solid #ddd;text-align:center;">${mark(c2)}</td></tr>`;
+  // 値行
+  const makeValRow = (label, val) =>
+    `<tr><td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;"><b>${esc(label)}</b></td><td colspan="3" style="padding:3px 6px;border:1px solid #ddd;font-size:10px;">${esc(val)}</td></tr>`;
+
+  // セクション内チェック項目をペアリング（10文字以内 & ノートなし & 複数項目形式のみ2列）
+  const renderItems = (items, getId) => {
+    let r = ''; let i = 0;
+    while (i < items.length) {
+      const item = items[i];
+      const id   = getId(i);
+      if (!forceSingle && item.t === 'check' && !item.note && item.text.length <= 10) {
+        const next = items[i+1];
+        if (next && next.t === 'check' && !next.note && next.text.length <= 10) {
+          const id2 = getId(i+1);
+          r += chkRow2(item.text, document.getElementById(id)?.checked, next.text, document.getElementById(id2)?.checked);
+          i += 2; continue;
+        }
+      }
+      if (item.t === 'check') r += chkRow1(item.text, item.note, document.getElementById(id)?.checked);
+      else r += makeValRow(item.label || item.text, document.getElementById(id)?.value || '');
+      i++;
+    }
+    return r;
+  };
+
+  // カプラーセクション
+  if (form.couplerSelect && couplerType) {
+    rows += secRow(`カプラー（${cName}）`);
+    const ids = couplerIds[couplerType];
+    let ci = 0;
+    form.couplerGroups.forEach(grp => {
+      rows += dirRow(grp.dir);
+      const grpItems = grp.items.map(text => ({t:'check',text}));
+      rows += renderItems(grpItems, j => ids[ci + j]);
+      ci += grp.items.length;
+    });
+  }
+
+  // 通常セクション
+  form.sections.forEach(sec => {
+    rows += secRow(sec.name);
+    rows += renderItems(sec.items, j => `fi-${sec.name}-${j}`);
+  });
+
+  const table = `<table style="width:100%;border-collapse:collapse;font-size:10px;">
+    <colgroup><col style="width:44%"><col style="width:6%"><col style="width:44%"><col style="width:6%"></colgroup>
+    <thead><tr style="background:#7c2d12;color:#fff;">
+      <th colspan="3" style="padding:4px 8px;border:1px solid #888;text-align:left;font-size:10px;">チェック項目</th>
+      <th style="padding:4px;border:1px solid #888;text-align:center;font-size:10px;">結果</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+
+  const rem = esc(v('f-remarks')).replace(/\n/g,'<br>');
+  return `<div style="text-align:center;font-size:15px;font-weight:bold;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #9a3412;">${esc(form.title)}</div>
+    ${info}${table}
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <div style="font-weight:bold;white-space:nowrap;padding-top:3px;font-size:10px;">備考</div>
+      <div style="border:1px solid #aaa;padding:4px 8px;min-height:30px;flex:1;font-size:10px;">${rem}</div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════
+//  ユーティリティ
+// ════════════════════════════════════════════════
+function toggleKanaGroup(gid) {
+  const body = document.getElementById(gid);
+  const arrow = document.getElementById('arr-' + gid);
+  if (!body) return;
+  const isCollapsed = body.classList.toggle('collapsed');
+  arrow.style.transform = isCollapsed ? 'rotate(-90deg)' : '';
+}
+
+function getKanaGroup(kana) {
+  if (!kana) return 'その他';
+  let c = kana[0];
+  // カタカナ→ひらがな変換
+  c = c.replace(/[\u30A1-\u30F6]/g, m => String.fromCharCode(m.charCodeAt(0) - 0x60));
+  if ('あいうえお'.includes(c)) return 'あ行';
+  if ('かきくけこがぎぐげご'.includes(c)) return 'か行';
+  if ('さしすせそざじずぜぞ'.includes(c)) return 'さ行';
+  if ('たちつてとだぢづでど'.includes(c)) return 'た行';
+  if ('なにぬねの'.includes(c)) return 'な行';
+  if ('はひふへほばびぶべぼぱぴぷぺぽ'.includes(c)) return 'は行';
+  if ('まみむめも'.includes(c)) return 'ま行';
+  if ('やゆよ'.includes(c)) return 'や行';
+  if ('らりるれろ'.includes(c)) return 'ら行';
+  if ('わをん'.includes(c)) return 'わ行';
+  return 'その他';
+}
+
+function groupByKana(list) {
+  const order = ['あ行','か行','さ行','た行','な行','は行','ま行','や行','ら行','わ行','その他'];
+  const map = {};
+  list.forEach(item => {
+    const g = getKanaGroup(item[1].kana || item[1].name);
+    if (!map[g]) map[g] = [];
+    map[g].push(item);
+  });
+  return order.filter(g => map[g]).map(g => ({
+    group: g,
+    items: map[g].sort((a,b) => (a[1].kana||a[1].name).localeCompare(b[1].kana||b[1].name, 'ja'))
+  }));
+}
+
+function showInfoImage(src) {
+  document.getElementById('img-modal-img').src = src;
+  document.getElementById('img-modal').classList.add('show');
+}
+function closeImgModal() {
+  document.getElementById('img-modal').classList.remove('show');
+  document.getElementById('img-modal-img').src = '';
+}
+
+function updateCount(val) {
+  const count = val.trim() ? val.split(',').map(s=>s.trim()).filter(s=>s).length : 0;
+  const el = document.getElementById('info-count');
+  if (el) el.textContent = count ? `${count}台` : '－';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showLoading(on) { document.getElementById('loading').classList.toggle('show',on); }
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ════════════════════════════════════════════════
+//  ホームボタン
+// ════════════════════════════════════════════════
+function goHome() {
+  const onForm = document.getElementById('screen-form').classList.contains('active');
+  if (onForm && !confirm('ホームに戻りますか？\n入力中のデータは失われます。')) return;
+  document.querySelector('.screen.active').classList.remove('active');
+  document.getElementById('screen-home').classList.add('active');
+  S.stack = [];
+}
+
+// 全画面ヘッダーにホームボタンを追加（ホーム画面以外）
+document.querySelectorAll('.screen:not(#screen-home) .screen-header').forEach(header => {
+  const div = document.createElement('div');
+  div.className = 'header-action';
+  div.innerHTML = '<button onclick="goHome()">🏠</button>';
+  header.appendChild(div);
+});
+
+// ════════════════════════════════════════════════
+//  初期化
+// ════════════════════════════════════════════════
+loadMasters();
+</script>
+</body>
+</html>
